@@ -1,0 +1,82 @@
+---
+title: "Netflix Movies and TV Shows Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(kableExtra)
+library(plotly)
+library(lubridate)
+df <- read_csv('C:/Users/bhavi/Downloads/netflix_titles.csv')
+df <- tibble::as_tibble(df) %>% select(-c(show_id, description))
+data.frame(var = c(colnames(df)), 
+           missing = sapply(df, function(x) sum(is.na(x))), row.names = NULL) %>%
+  mutate(missing = cell_spec(missing, "html", 
+                             color = ifelse(missing > 0, 'red', 'black'))) %>% 
+  rename(`Variable` = var, `Missing Value Count` = missing) %>%
+  kable(format = "html", escape = F, align = c("l", "c")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+df$rating[is.na(df$rating)] <- getmode(df$rating)
+df <- distinct(df, type, title, country, release_year, .keep_all = T)
+df$date_added <- as.Date(df$date_added, format = "%B %d, %Y")
+
+```
+
+Column {data-width=200}
+-----------------------------------------------------------------------
+
+### Most watched shows
+
+```{r}
+content_by_type <- df %>% group_by(type) %>% 
+  summarise(count = n())
+plot_ly(content_by_type, labels = ~type, values = ~count, 
+        type = 'pie', marker = list(colors = c("#bd3939", "#399ba3"))) %>% layout( title = "Proportion of Content by Type")
+```
+
+
+Column {data-width=230}
+-----------------------------------------------------------------------
+### 1. Total number of movies watched by children 2. Total number of standup comedies 
+
+```{r}
+s_genres <- strsplit(df$listed_in, split = ", ")
+genres_listed_in <- data.frame(type = rep(df$type, sapply(s_genres, length)), 
+                               listed_in = unlist(s_genres))
+genres_listed_in$listed_in <- as.character(gsub(",","",genres_listed_in$listed_in))
+
+df_by_listed_in <- genres_listed_in %>% 
+  group_by(type, listed_in) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% top_n(10)
+
+plot_ly(df_by_listed_in, x = ~listed_in, y = ~count,
+        type = 'bar', color = ~type,
+        colors = c("#bd3939", "#399ba3")) %>%
+  layout(title = "Top Genres (Movie vs. TV Show)")
+```
+
+Column {data-width=290}
+-----------------------------------------------------------------------
+
+### High Rated Shows
+
+```{r}
+df_by_rating <- df %>% group_by(rating) %>% 
+  summarise(count = n())
+
+plot_ly(df_by_rating, type = 'pie',
+        labels = ~rating, values = ~count) %>% 
+  layout(title = "Distribution of Content by Rating")
+
+```
+
